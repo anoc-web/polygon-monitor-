@@ -1,23 +1,13 @@
-import { ethers } from "https://esm.sh/ethers@6.13.4";
+import { DEFAULT_CONFIG } from "./config.js";
 
-// Configuración directa incrustada para evitar problemas de caché en GitHub Pages
-const CONFIG = {
-  rpcUrl: "https://polygon-rpc.com",
-  // Tu dirección de MetaMask que vimos en las capturas
-  wallets: [
-    "0x68753328aabc02d0c8e863015d19ed02f3eda777"
-  ],
-  tokens: [
-    { symbol: "USDC.e", address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", decimals: 6 },
-    { symbol: "USDT",   address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6 },
-    { symbol: "WETH",   address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", decimals: 18 }
-  ]
-};
+function loadConfig() {
+  const saved = localStorage.getItem("anoc_polygon_config");
+  return saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : DEFAULT_CONFIG;
+}
 
-// Inicializar proveedor RPC de Polygon de forma directa
-const provider = new ethers.JsonRpcProvider(CONFIG.rpcUrl);
+let currentConfig = loadConfig();
 
-// Manejo de pestañas de la interfaz
+// Pestañas
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach(b => {
@@ -33,53 +23,61 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
   });
 });
 
-// Precargar inputs de configuración
-document.getElementById("input-rpc").value = CONFIG.rpcUrl;
-document.getElementById("input-wallets").value = CONFIG.wallets.join("\n");
+document.getElementById("input-wallets").value = currentConfig.wallets.join("\n");
 
 document.getElementById("btn-save-settings").addEventListener("click", () => {
-  const newRpc = document.getElementById("input-rpc").value.trim();
-  const newWallets = document.getElementById("input-wallets").value
+  const wallets = document.getElementById("input-wallets").value
     .split("\n")
     .map(l => l.trim())
     .filter(l => l.length > 0);
 
-  if (newRpc) CONFIG.rpcUrl = newRpc;
-  if (newWallets.length > 0) CONFIG.wallets = newWallets;
-  
-  alert("Configuración aplicada. Actualizando datos...");
-  loadDashboard();
+  currentConfig = { ...currentConfig, wallets };
+  localStorage.setItem("anoc_polygon_config", JSON.stringify(currentConfig));
+  refreshDashboard();
+  alert("Direcciones guardadas.");
 });
 
-async function loadDashboard() {
+async function refreshDashboard() {
   const statusEl = document.getElementById("wallets-status");
-  statusEl.textContent = "Consultando red Polygon...";
+  statusEl.textContent = "Consultando mercado...";
 
   try {
-    // 1. Obtener bloque y gas
-    const [blockNumber, feeData] = await Promise.all([
-      provider.getBlockNumber(),
-      provider.getFeeData()
-    ]);
-    const gasGwei = feeData.gasPrice ? Number(ethers.formatUnits(feeData.gasPrice, "gwei")).toFixed(1) : "--";
+    // 1. Obtener precio del POL desde Dexscreener
+    let polPrice = 0.0861; // fallback
+    try {
+      const resPair = await fetch(`https://api.dexscreener.com/latest/dex/pairs/polygon/${currentConfig.watchlistPairs[1]}`);
+      const dataPair = await resPair.json();
+      if (dataPair.pairs && dataPair.pairs.length > 0) {
+        polPrice = Number(dataPair.pairs[0].priceUsd);
+      }
+    } catch (e) {
+      console.warn("Usando precio base para POL");
+    }
 
-    document.getElementById("block-number").textContent = `#${blockNumber}`;
-    document.getElementById("gas-price").textContent = `${gasGwei} Gwei`;
-    document.getElementById("pol-price").textContent = `$0.0861`; // Referencia inicial o se actualiza
+    document.getElementById("pol-price").textContent = `$${polPrice.toFixed(4)}`;
 
-    // 2. Consultar saldos de las wallets de forma directa y segura
+    // 2. Consultar saldos nativos usando la API pública de Polygonscan
+    statusEl.textContent = "Consultando cuentas...";
     const tbody = document.getElementById("wallets-table-body");
     tbody.innerHTML = "";
     let grandTotalUsd = 0;
 
-    for (let i = 0; i < CONFIG.wallets.length; i++) {
-      const address = CONFIG.wallets[i];
-      if (!ethers.isAddress(address)) continue;
+    for (let i = 0; i < currentConfig.wallets.length; i++) {
+      const address = currentConfig.wallets[i];
+      let nativeBal = 0;
 
-      // Obtener balance nativo (POL/MATIC)
-      const balanceWei = await provider.getBalance(address);
-      const nativeBal = Number(ethers.formatEther(balanceWei));
-      const usdValue = nativeBal * 0.0861; // Estimado base con el precio del POL
+      try {
+        // API pública de Polygonscan para balance nativo
+        const res = await fetch(`https://api.polygonscan.com/api?module=account&action=balance&address=${address}&tag=latest`);
+        const data = await res.json();
+        if (data.status === "1") {
+          nativeBal = Number(data.result) / 1e18;
+        }
+      } catch (err) {
+        console.warn(`Error consultando saldo para ${address}`, err);
+      }
+
+      const usdValue = nativeBal * polPrice;
       grandTotalUsd += usdValue;
 
       const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -89,23 +87,43 @@ async function loadDashboard() {
         <td class="px-4 py-2.5 text-gray-400">W-${String(i + 1).padStart(2, "0")}</td>
         <td class="px-4 py-2.5"><a href="https://polygonscan.com/address/${address}" target="_blank" class="text-purple-400 hover:underline">${shortAddr}</a></td>
         <td class="px-4 py-2.5 text-right text-gray-200">${nativeBal.toFixed(4)}</td>
-        <td class="px-4 py-2.5 text-right text-emerald-400">$0.00</td>
-        <td class="px-4 py-2.5 text-right text-blue-300">0.0000</td>
         <td class="px-4 py-2.5 text-right font-semibold text-white">$${usdValue.toFixed(2)}</td>
       `;
       tbody.appendChild(tr);
     }
 
     document.getElementById("total-portfolio").textContent = `$${grandTotalUsd.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-    statusEl.textContent = `Sincronizado (${CONFIG.wallets.length} cuentas)`;
+    statusEl.textContent = `Sincronizado (${currentConfig.wallets.length} cuentas)`;
+
+    // 3. Cargar Watchlist de Dexscreener
+    const resDeX = await fetch(`https://api.dexscreener.com/latest/dex/pairs/polygon/${currentConfig.watchlistPairs.join(",")}`);
+    const dataDeX = await resDeX.json();
+    if (dataDeX.pairs) {
+      renderWatchlist(dataDeX.pairs);
+    }
 
   } catch (err) {
-    console.error("Error consultando blockchain:", err);
-    statusEl.textContent = "Error de conexión RPC";
+    console.error(err);
+    statusEl.textContent = "Error al actualizar";
   }
 }
 
-document.getElementById("btn-refresh").addEventListener("click", loadDashboard);
+function renderWatchlist(pairs) {
+  const tbody = document.getElementById("watchlist-table-body");
+  tbody.innerHTML = "";
+  pairs.forEach(pair => {
+    const change24 = pair.priceChange?.h24 ?? 0;
+    const tr = document.createElement("tr");
+    tr.className = "table-row transition";
+    tr.innerHTML = `
+      <td class="px-4 py-2.5 font-sans font-semibold text-white">${pair.baseToken.symbol}<span class="text-gray-400 font-normal">/${pair.quoteToken.symbol}</span></td>
+      <td class="px-4 py-2.5 uppercase text-gray-400">${pair.dexId}</td>
+      <td class="px-4 py-2.5 text-right text-white">$${Number(pair.priceUsd).toFixed(4)}</td>
+      <td class="px-4 py-2.5 text-right ${change24 >= 0 ? "text-emerald-400" : "text-rose-400"}">${change24 > 0 ? "+" : ""}${change24}%</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
 
-// Ejecutar al iniciar
-loadDashboard();
+document.getElementById("btn-refresh").addEventListener("click", refreshDashboard);
+refreshDashboard();
