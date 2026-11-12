@@ -39,11 +39,11 @@ document.getElementById("btn-save-settings").addEventListener("click", () => {
 
 async function refreshDashboard() {
   const statusEl = document.getElementById("wallets-status");
-  statusEl.textContent = "Consultando mercado...";
+  statusEl.textContent = "Sincronizando con Polygonscan...";
 
   try {
-    // 1. Obtener precio del POL desde Dexscreener
-    let polPrice = 0.0861; // fallback
+    // 1. Obtener precio del POL desde Dexscreener (tal cual se ve en tu captura: ~$0.0861)
+    let polPrice = 0.0861;
     try {
       const resPair = await fetch(`https://api.dexscreener.com/latest/dex/pairs/polygon/${currentConfig.watchlistPairs[1]}`);
       const dataPair = await resPair.json();
@@ -51,13 +51,12 @@ async function refreshDashboard() {
         polPrice = Number(dataPair.pairs[0].priceUsd);
       }
     } catch (e) {
-      console.warn("Usando precio base para POL");
+      console.warn("Usando precio base POL");
     }
 
     document.getElementById("pol-price").textContent = `$${polPrice.toFixed(4)}`;
 
-    // 2. Consultar saldos nativos usando la API pública de Polygonscan
-    statusEl.textContent = "Consultando cuentas...";
+    // 2. Consultar saldos en bucle limpio para cada dirección
     const tbody = document.getElementById("wallets-table-body");
     tbody.innerHTML = "";
     let grandTotalUsd = 0;
@@ -67,14 +66,20 @@ async function refreshDashboard() {
       let nativeBal = 0;
 
       try {
-        // API pública de Polygonscan para balance nativo
-        const res = await fetch(`https://api.polygonscan.com/api?module=account&action=balance&address=${address}&tag=latest`);
+        // Usamos la API pública de Polygonscan para traer el balance exacto en Wei
+        const url = `https://api.polygonscan.com/api?module=account&action=balance&address=${address}&tag=latest`;
+        const res = await fetch(url);
         const data = await res.json();
-        if (data.status === "1") {
-          nativeBal = Number(data.result) / 1e18;
+        
+        if (data && data.status === "1" && data.result) {
+          // Conversión precisa de Wei (10^18) a POL utilizando BigInt para evitar pérdida de decimales
+          const weiValue = BigInt(data.result);
+          const integerPart = weiValue / BigInt(10**18);
+          const fractionalPart = Number(weiValue % BigInt(10**18)) / 1e18;
+          nativeBal = Number(integerPart) + fractionalPart;
         }
       } catch (err) {
-        console.warn(`Error consultando saldo para ${address}`, err);
+        console.warn(`Error al consultar saldo para ${address}:`, err);
       }
 
       const usdValue = nativeBal * polPrice;
@@ -86,7 +91,7 @@ async function refreshDashboard() {
       tr.innerHTML = `
         <td class="px-4 py-2.5 text-gray-400">W-${String(i + 1).padStart(2, "0")}</td>
         <td class="px-4 py-2.5"><a href="https://polygonscan.com/address/${address}" target="_blank" class="text-purple-400 hover:underline">${shortAddr}</a></td>
-        <td class="px-4 py-2.5 text-right text-gray-200">${nativeBal.toFixed(4)}</td>
+        <td class="px-4 py-2.5 text-right text-gray-200">${nativeBal.toFixed(4)} POL</td>
         <td class="px-4 py-2.5 text-right font-semibold text-white">$${usdValue.toFixed(2)}</td>
       `;
       tbody.appendChild(tr);
