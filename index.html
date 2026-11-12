@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ANOC-WEB | Polygon Multi-Wallet & DeFi Monitor</title>
+  <title>ANOC-WEB | Polygon Explorer Monitor</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { background-color: #0b0e11; color: #eaecef; font-family: 'Inter', system-ui, sans-serif; }
@@ -15,28 +15,20 @@
 </head>
 <body class="min-h-screen flex flex-col">
 
-  <!-- Top Bar Global (Estilo Dexscreener) -->
+  <!-- Top Bar -->
   <header class="panel border-x-0 border-t-0 px-4 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20">
     <div class="flex items-center gap-3">
       <div class="w-3 h-3 rounded-full bg-purple-500 animate-pulse"></div>
-      <h1 class="font-bold text-lg tracking-tight">ANOC<span class="text-purple-400">.DEX</span> <span class="text-xs bg-purple-900/40 text-purple-300 px-2 py-0.5 rounded border border-purple-700/50 ml-1">POLYGON POS</span></h1>
+      <h1 class="font-bold text-lg tracking-tight">ANOC<span class="text-purple-400">.DEX</span> <span class="text-xs bg-purple-900/40 text-purple-300 px-2 py-0.5 rounded border border-purple-700/50 ml-1">EXPLORER API</span></h1>
     </div>
 
     <div class="flex flex-wrap items-center gap-6 text-sm">
-      <div>
-        <span class="text-gray-400 text-xs block">Bloque Actual</span>
-        <span id="block-number" class="font-mono font-semibold text-gray-200">Cargando...</span>
-      </div>
-      <div>
-        <span class="text-gray-400 text-xs block">Gas Polygon</span>
-        <span id="gas-price" class="font-mono font-semibold text-emerald-400">-- Gwei</span>
-      </div>
       <div>
         <span class="text-gray-400 text-xs block">Precio POL / MATIC</span>
         <span id="pol-price" class="font-mono font-semibold text-blue-400">$--</span>
       </div>
       <div>
-        <span class="text-gray-400 text-xs block">Balance Total (24 Wallets)</span>
+        <span class="text-gray-400 text-xs block">Balance Total Cartera</span>
         <span id="total-portfolio" class="font-mono font-bold text-lg text-white">$0.00</span>
       </div>
       <button id="btn-refresh" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-semibold transition cursor-pointer">
@@ -45,30 +37,27 @@
     </div>
   </header>
 
-  <!-- Navegación por Pestañas -->
+  <!-- Pestañas -->
   <nav class="px-4 pt-3 border-b border-[#2b3139] flex gap-2 text-sm">
     <button data-tab="wallets" class="tab-btn px-4 py-2 border-b-2 border-purple-500 text-white font-medium cursor-pointer">
-      Wallets
-    </button>
-    <button data-tab="pools" class="tab-btn px-4 py-2 border-b-2 border-transparent text-gray-400 hover:text-gray-200 cursor-pointer">
-      Pools (Uniswap / QuickSwap)
+      Mis Cuentas MetaMask
     </button>
     <button data-tab="watchlist" class="tab-btn px-4 py-2 border-b-2 border-transparent text-gray-400 hover:text-gray-200 cursor-pointer">
-      Contratos Remix & Terceros
+      Watchlist Dexscreener
     </button>
     <button data-tab="settings" class="tab-btn px-4 py-2 border-b-2 border-transparent text-gray-400 hover:text-gray-200 cursor-pointer ml-auto">
-      ⚙ Configurar Wallets / RPC
+      ⚙ Configurar Direcciones
     </button>
   </nav>
 
-  <!-- Contenido Principal -->
+  <!-- Contenido -->
   <main class="flex-1 p-4 max-w-[1600px] w-full mx-auto">
 
     <!-- TAB 1: WALLETS -->
     <section id="tab-wallets" class="tab-content space-y-4">
       <div class="panel rounded-lg overflow-hidden">
         <div class="px-4 py-3 border-b border-[#2b3139] flex justify-between items-center">
-          <h2 class="font-semibold text-sm uppercase tracking-wider text-gray-300">Desglose de Cuentas MetaMask (Multicall Batch)</h2>
+          <h2 class="font-semibold text-sm uppercase tracking-wider text-gray-300">Monitoreo por API del Explorador</h2>
           <span id="wallets-status" class="text-xs text-gray-400">Listo</span>
         </div>
         <div class="overflow-x-auto">
@@ -76,74 +65,49 @@
             <thead class="bg-[#1e2329] text-gray-400 text-xs uppercase">
               <tr>
                 <th class="px-4 py-3">#</th>
-                <th class="px-4 py-3">Etiqueta / Dirección</th>
+                <th class="px-4 py-3">Dirección</th>
                 <th class="px-4 py-3 text-right">POL (Nativo)</th>
-                <th class="px-4 py-3 text-right">USDC.e / USDT</th>
-                <th class="px-4 py-3 text-right">WETH</th>
                 <th class="px-4 py-3 text-right">Valor Estimado (USD)</th>
               </tr>
             </thead>
-            <tbody id="wallets-table-body" class="divide-y divide-[#2b3139] font-mono text-xs">
-              <!-- Se llena dinámicamente -->
-            </tbody>
+            <tbody id="wallets-table-body" class="divide-y divide-[#2b3139] font-mono text-xs"></tbody>
           </table>
         </div>
       </div>
     </section>
 
-    <!-- TAB 2: POOLS -->
-    <section id="tab-pools" class="tab-content hidden space-y-4">
-      <div class="panel rounded-lg p-6 text-center text-gray-400">
-        <p class="text-base text-gray-200 font-semibold mb-1">Módulo de Liquidez (Uniswap V3 & QuickSwap)</p>
-        <p class="text-xs">En el Hito 2 conectaremos el NonfungiblePositionManager de Polygon para listar tus NFTs de liquidez y comisiones sin reclamar.</p>
-      </div>
-    </section>
-
-    <!-- TAB 3: WATCHLIST & REMIX -->
+    <!-- TAB 2: WATCHLIST -->
     <section id="tab-watchlist" class="tab-content hidden space-y-4">
       <div class="panel rounded-lg overflow-hidden">
-        <div class="px-4 py-3 border-b border-[#2b3139] flex justify-between items-center">
-          <h2 class="font-semibold text-sm uppercase tracking-wider text-gray-300">Monitoreo en Vivo (Dexscreener API + Contratos)</h2>
-          <span class="text-xs text-emerald-400">● Feed en tiempo real</span>
+        <div class="px-4 py-3 border-b border-[#2b3139]">
+          <h2 class="font-semibold text-sm uppercase tracking-wider text-gray-300">Mercado en Vivo</h2>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
             <thead class="bg-[#1e2329] text-gray-400 text-xs uppercase">
               <tr>
-                <th class="px-4 py-3">Par / Proyecto</th>
+                <th class="px-4 py-3">Par</th>
                 <th class="px-4 py-3">DEX</th>
                 <th class="px-4 py-3 text-right">Precio USD</th>
                 <th class="px-4 py-3 text-right">Cambio 24h</th>
-                <th class="px-4 py-3 text-right">Volumen 24h</th>
-                <th class="px-4 py-3 text-right">Liquidez</th>
               </tr>
             </thead>
-            <tbody id="watchlist-table-body" class="divide-y divide-[#2b3139] font-mono text-xs">
-              <!-- Se llena con API de Dexscreener -->
-            </tbody>
+            <tbody id="watchlist-table-body" class="divide-y divide-[#2b3139] font-mono text-xs"></tbody>
           </table>
         </div>
       </div>
     </section>
 
-    <!-- TAB 4: CONFIGURACIÓN -->
+    <!-- TAB 3: CONFIG -->
     <section id="tab-settings" class="tab-content hidden space-y-4">
       <div class="panel rounded-lg p-5 max-w-2xl space-y-4">
-        <h2 class="font-semibold text-base text-white">Configuración Local (Guardado en tu navegador)</h2>
-        <p class="text-xs text-gray-400">Pegá tus 24 direcciones públicas (una por línea). Nunca ingreses claves privadas ni frases semilla.</p>
-        
+        <h2 class="font-semibold text-base text-white">Configuración de Direcciones</h2>
+        <p class="text-xs text-gray-400">Pegá tus direcciones públicas (una por línea).</p>
         <div>
-          <label class="block text-xs text-gray-300 mb-1">RPC URL de Polygon</label>
-          <input id="input-rpc" type="text" class="w-full bg-[#0b0e11] border border-[#2b3139] rounded px-3 py-2 text-xs font-mono text-gray-200" />
+          <textarea id="input-wallets" rows="10" class="w-full bg-[#0b0e11] border border-[#2b3139] rounded px-3 py-2 text-xs font-mono text-gray-200"></textarea>
         </div>
-
-        <div>
-          <label class="block text-xs text-gray-300 mb-1">Direcciones Públicas (0x... una por línea)</label>
-          <textarea id="input-wallets" rows="10" class="w-full bg-[#0b0e11] border border-[#2b3139] rounded px-3 py-2 text-xs font-mono text-gray-200" placeholder="0x123...&#10;0x456..."></textarea>
-        </div>
-
         <button id="btn-save-settings" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-xs font-semibold cursor-pointer">
-          Guardar y Recargar Datos
+          Guardar y Consultar
         </button>
       </div>
     </section>
